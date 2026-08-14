@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>世界の半導体メーカー・ベンダー拠点マップ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+<style>
+  :root{
+    --bg: #0a0f1a; --panel: #111a2c; --panel-2: #0d1422;
+    --border: #213049; --hairline: #1a2438;
+    --text: #e9eefb; --text-dim: #8b97b3; --text-faint: #5c6884;
+    --foundry: #ff8a4c; --memory: #ffd166; --equipment: #46d4ff;
+    --fabless: #b49cff; --idm: #7fe3a8; --packaging: #ff6b9d;
+    --materials: #e3b577; --eda: #60a5fa;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:
+      radial-gradient(1200px 650px at 85% -10%, rgba(70,212,255,0.07), transparent 60%),
+      radial-gradient(900px 550px at -10% 100%, rgba(255,138,76,0.06), transparent 60%),
+      var(--bg);
+    color:var(--text); font-family:'Inter', -apple-system, sans-serif; -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  header{
+    padding:22px clamp(16px,4vw,40px) 14px; border-bottom:1px solid var(--hairline);
+    display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:14px;
+  }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:0.16em; color:var(--equipment);
+    text-transform:uppercase; display:flex; align-items:center; gap:8px; margin-bottom:8px;
+  }
+  .eyebrow .dot{ width:6px;height:6px;border-radius:50%; background:var(--equipment); animation:pulse 2.2s infinite; }
+  @keyframes pulse{ 0%{box-shadow:0 0 0 0 rgba(70,212,255,0.45);} 70%{box-shadow:0 0 0 8px rgba(70,212,255,0);} 100%{box-shadow:0 0 0 0 rgba(70,212,255,0);} }
+  h1{ font-family:'Space Grotesk', sans-serif; font-size:clamp(18px,2.3vw,25px); font-weight:700; margin:0; letter-spacing:-0.01em; }
+  h1 span{color:var(--text-dim); font-weight:500;}
+  .stat{ font-family:'IBM Plex Mono', monospace; text-align:right; font-size:12px; color:var(--text-dim); line-height:1.6; }
+  .stat b{ font-size:21px; color:var(--text); font-family:'Space Grotesk', sans-serif; display:block; }
+  .stat small{ color:var(--text-faint); font-size:10px; }
+  .toggle{ width:34px; height:19px; border-radius:100px; border:1px solid var(--border); background:var(--panel-2); position:relative; cursor:pointer; padding:0; transition:background .15s ease, border-color .15s ease; }
+  .toggle .knob{ position:absolute; top:1px; left:1px; width:15px; height:15px; border-radius:50%; background:var(--text-faint); transition:transform .18s ease, background .18s ease; }
+  .toggle.on{ border-color:var(--equipment); background:rgba(70,212,255,0.12); }
+  .toggle.on .knob{ transform:translateX(15px); background:var(--equipment); }
+  .app{ display:grid; grid-template-columns:380px 1fr; height:calc(100vh - 82px); min-height:560px; }
+  @media (max-width:880px){ .app{ grid-template-columns:1fr; height:auto; } #map{ height:48vh; } .sidebar{ height:auto; max-height:none; border-right:none; border-top:1px solid var(--hairline); } }
+  .sidebar{ background:var(--panel-2); border-right:1px solid var(--hairline); display:flex; flex-direction:column; overflow:hidden; }
+  .searchbox{ padding:12px 16px 0; }
+  .searchbox input{ width:100%; background:var(--panel); border:1px solid var(--border); color:var(--text); font-family:'Inter', sans-serif; font-size:13px; padding:9px 12px; border-radius:8px; outline:none; }
+  .searchbox input::placeholder{ color:var(--text-faint); }
+  .searchbox input:focus{ border-color:var(--equipment); }
+  .filters{ padding:12px 16px 12px; border-bottom:1px solid var(--hairline); display:flex; flex-wrap:wrap; gap:7px; }
+  .chip{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; padding:5px 9px; border-radius:100px; border:1px solid var(--border); color:var(--text-dim); cursor:pointer; background:transparent; display:flex; align-items:center; gap:5px; transition:all .15s ease; user-select:none; }
+  .chip .sw{width:7px;height:7px;border-radius:50%;flex:none;}
+  .chip.active{ color:var(--text); border-color:currentColor; }
+  .chip:hover{ border-color:#3a4a6b; }
+  .list{ flex:1; overflow-y:auto; padding:6px 0; }
+  .list::-webkit-scrollbar{width:8px;}
+  .list::-webkit-scrollbar-thumb{background:#1f2c45; border-radius:8px;}
+  .card{ padding:10px 16px; border-bottom:1px solid var(--hairline); cursor:pointer; transition:background .12s ease; }
+  .card:hover{ background:rgba(70,212,255,0.04); }
+  .card.selected{ background:rgba(70,212,255,0.07); }
+  .card-top{ display:flex; align-items:center; gap:8px; margin-bottom:3px;}
+  .card-dot{width:7px;height:7px;border-radius:50%;flex:none;}
+  .card-name{font-weight:600; font-size:12.5px; line-height:1.3;}
+  .card-cat{ font-family:'IBM Plex Mono', monospace; font-size:8.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.06em; margin-left:auto; flex:none; }
+  .card-role{ font-size:11px; color:var(--text-dim); line-height:1.4; margin:0 0 4px; }
+  .card-addr{ font-family:'IBM Plex Mono', monospace; font-size:9px; color:var(--text-faint); }
+  .empty{ padding:40px 20px; text-align:center; color:var(--text-faint); font-size:13px; }
+  .legend{ padding:11px 16px 13px; border-top:1px solid var(--hairline); font-size:9.5px; color:var(--text-faint); font-family:'IBM Plex Mono', monospace; line-height:1.8; display:grid; grid-template-columns:1fr 1fr; gap:0 8px; }
+  .legend b{ color:var(--text-dim); display:block; margin-bottom:4px; font-weight:500; grid-column:1/-1;}
+  #map{ width:100%; height:100%; background:#0d1422; }
+  .leaflet-popup-content-wrapper{ background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:10px; box-shadow:0 12px 30px rgba(0,0,0,0.45); }
+  .leaflet-popup-tip{ background:var(--panel); border:1px solid var(--border); }
+  .leaflet-popup-content{ margin:13px 15px; font-family:'Inter', sans-serif; }
+  .pop-cat{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.05em; text-transform:uppercase; margin-bottom:4px;}
+  .pop-name{ font-family:'Space Grotesk', sans-serif; font-weight:700; font-size:15px; margin-bottom:6px;}
+  .pop-role{ font-size:12.5px; color:var(--text-dim); line-height:1.55; margin-bottom:6px;}
+  .pop-addr{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--text-faint); }
+  .leaflet-container a.leaflet-popup-close-button{ color:var(--text-dim); }
+  .my-marker{ display:flex; align-items:center; justify-content:center; }
+  .map-label{ background:rgba(10,15,26,0.85); border:1px solid var(--border); color:var(--text); font-family:'IBM Plex Mono', monospace; font-size:9.5px; padding:1px 5px; border-radius:5px; box-shadow:none; white-space:nowrap; backdrop-filter:blur(2px); }
+  .map-label::before{ display:none; }
+  .cluster-icon{ background:rgba(70,212,255,0.16); border:1.5px solid var(--equipment); border-radius:50%; display:flex; align-items:center; justify-content:center; color:var(--text); font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  footer{ padding:7px clamp(16px,4vw,40px); border-top:1px solid var(--hairline); font-family:'IBM Plex Mono', monospace; font-size:9px; color:var(--text-faint); background:var(--panel-2); line-height:1.5; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow"><span class="dot"></span>GLOBAL SEMICONDUCTOR INDUSTRY</div>
+    <h1>世界の半導体 <span>メーカー・ベンダー拠点マップ</span></h1>
+  </div>
+  <div class="stat">
+    <div style="display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-bottom:6px;">
+      <span class="mono" style="font-size:11px;color:var(--text-dim);">ラベル表示</span>
+      <button id="labelToggle" class="toggle" aria-pressed="false"><span class="knob"></span></button>
+    </div>
+    表示中拠点<b id="countText">274 / 274</b>
+    <small>ズーム拡大で社名表示</small>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="searchbox"><input id="searchInput" type="text" placeholder="企業名で検索..." /></div>
+    <div class="filters" id="filters"></div>
+    <div class="list" id="list"></div>
+    <div class="legend">
+      <b>カテゴリー</b>
+      <span class="mono">● ファウンドリ/IDM</span>
+      <span class="mono">● メモリ</span>
+      <span class="mono">● 装置メーカー</span>
+      <span class="mono">● ファブレス</span>
+      <span class="mono">● アナログ/車載IDM</span>
+      <span class="mono">● 後工程(OSAT)</span>
+      <span class="mono">● 材料・基板</span>
+      <span class="mono">● 設計ツール(EDA)</span>
+    </div>
+  </aside>
+  <main id="map"></main>
+</div>
+
+<footer>※ 各社公開情報・地図情報をもとに本社等の代表1地点を表示した参考情報です（関連工場・地域拠点を代表地点とする場合あり）。現在274社を掲載（ガス検知器・排ガス除害装置・真空ポンプ・チラー・産業ガスメーカーを含む）。CXMT、GigaDevice、NAURA、杭州士蘭微電子、Innoscience、SK Materials等は地図上で所在地を確実に確認できず除外しています。実際の拠点はさらに多数あり、所在地は変更される場合があります。</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  const CATS = {
+    foundry:   { label: "ファウンドリ/IDM",   color: "#ff8a4c" },
+    memory:    { label: "メモリ",             color: "#ffd166" },
+    equipment: { label: "装置メーカー",       color: "#46d4ff" },
+    fabless:   { label: "ファブレス",         color: "#b49cff" },
+    idm:       { label: "アナログ/車載IDM",   color: "#7fe3a8" },
+    packaging: { label: "後工程(OSAT)",       color: "#ff6b9d" },
+    materials: { label: "材料・基板",         color: "#e3b577" },
+    eda:       { label: "設計ツール(EDA)",    color: "#60a5fa" }
+  };
+
+  const facilities = [
+    { id:1, name:"TSMC（台湾積体電路製造）", category:"foundry", role:"世界最大手の半導体受託製造（ファウンドリ）。最先端ロジック半導体で圧倒的なシェアを持つ。", address:"台湾・新竹サイエンスパーク周辺", lat:24.7752198, lng:120.9902335 },
+    { id:2, name:"Samsung Electronics（半導体部門）", category:"foundry", role:"メモリ・ファウンドリ双方で世界トップクラス。半導体R&D拠点が華城（ファソン）に集積。", address:"韓国・京畿道華城市", lat:37.2253888, lng:127.0706365 },
+    { id:3, name:"Intel", category:"foundry", role:"米国を代表する垂直統合型半導体メーカー（IDM）。自社ファウンドリ事業も展開。", address:"米国・カリフォルニア州サンタクララ", lat:37.3871497, lng:-121.9638748 },
+    { id:4, name:"SMIC（中芯国際集成電路製造）", category:"foundry", role:"中国最大のファウンドリ。成熟プロセスを中心に旺盛な内需を取り込む。", address:"中国・上海市浦東新区", lat:31.2131355, lng:121.6079369 },
+    { id:5, name:"UMC（聯華電子）", category:"foundry", role:"台湾の大手ファウンドリ。特殊プロセス・成熟プロセスに強み。", address:"台湾・新竹市", lat:24.7708157, lng:121.0192901 },
+    { id:6, name:"GlobalFoundries", category:"foundry", role:"AMDの製造部門からスピンオフした米国系ファウンドリ。", address:"米国・ニューヨーク州モルタ", lat:42.9688139, lng:-73.7566549 },
+    { id:7, name:"Rapidus", category:"foundry", role:"日本発の次世代ロジック半導体ファウンドリ。北海道千歳市で2nm世代の量産を計画。", address:"日本・北海道千歳市", lat:42.7859714, lng:141.7063331 },
+    { id:8, name:"SK hynix", category:"memory", role:"DRAM・NAND型フラッシュメモリで世界2位手。HBM（広帯域メモリ）でも存在感。", address:"韓国・京畿道利川（イチョン）市", lat:37.2503302, lng:127.4838797 },
+    { id:9, name:"Micron Technology", category:"memory", role:"米国を代表するメモリメーカー。DRAM・NANDを自社生産する数少ないIDM。", address:"米国・アイダホ州ボイシ", lat:43.5206084, lng:-116.1377342 },
+    { id:10, name:"Kioxia（キオクシア）", category:"memory", role:"旧東芝メモリ。NAND型フラッシュメモリの世界大手。", address:"日本・東京都港区", lat:35.6448782, lng:139.7489962 },
+    { id:11, name:"ASML", category:"equipment", role:"EUV露光装置を事実上独占供給するオランダの装置メーカー。最先端プロセスのボトルネック技術を握る。", address:"オランダ・フェルトホーフェン", lat:51.40451, lng:5.4170135 },
+    { id:12, name:"Applied Materials", category:"equipment", role:"成膜・エッチングなど幅広い工程をカバーする世界最大の半導体製造装置メーカー。", address:"米国・カリフォルニア州サンタクララ", lat:37.3770741, lng:-121.9787773 },
+    { id:13, name:"Lam Research", category:"equipment", role:"エッチング・成膜装置の大手メーカー。微細加工技術に強み。", address:"米国・カリフォルニア州フリーモント", lat:37.4887928, lng:-121.9542083 },
+    { id:14, name:"東京エレクトロン（TEL）", category:"equipment", role:"日本最大の半導体製造装置メーカー。", address:"日本・東京都港区赤坂", lat:35.6731922, lng:139.7363938 },
+    { id:15, name:"KLA", category:"equipment", role:"検査・計測装置のリーディングカンパニー。", address:"米国・カリフォルニア州ミルピタス", lat:37.4207536, lng:-121.9257653 },
+    { id:16, name:"NVIDIA", category:"fabless", role:"GPU・AI半導体を設計するファブレス企業の代表格。製造はTSMC等に委託。", address:"米国・カリフォルニア州サンタクララ", lat:37.3706254, lng:-121.9671894 },
+    { id:17, name:"Qualcomm", category:"fabless", role:"スマートフォン向けSoC・通信チップで世界大手のファブレス企業。", address:"米国・カリフォルニア州サンディエゴ", lat:32.8979362, lng:-117.1964283 },
+    { id:18, name:"Broadcom", category:"fabless", role:"通信・データセンター・ネットワーク向け半導体を手がけるファブレス大手。", address:"米国・カリフォルニア州パロアルト", lat:37.4015758, lng:-122.1442662 },
+    { id:19, name:"Texas Instruments", category:"idm", role:"アナログ半導体で世界最大手のIDM。", address:"米国・テキサス州ダラス", lat:32.9132404, lng:-96.7524391 },
+    { id:20, name:"STMicroelectronics", category:"idm", role:"欧州最大級の総合半導体メーカー。", address:"スイス・ジュネーブ", lat:46.1645186, lng:6.1017262 },
+    { id:21, name:"Infineon Technologies", category:"idm", role:"パワー半導体で世界トップシェアを持つドイツの大手メーカー。", address:"ドイツ・ミュンヘン近郊ノイビーベルク", lat:48.0800871, lng:11.6173369 },
+    { id:22, name:"NXP Semiconductors", category:"idm", role:"車載・産業向け半導体に強いオランダの大手メーカー。", address:"オランダ・アイントホーフェン", lat:51.4088367, lng:5.4604197 },
+    { id:23, name:"Renesas Electronics", category:"idm", role:"車載マイコンで世界トップクラスの日本の半導体メーカー。", address:"日本・東京都江東区豊洲", lat:35.657575, lng:139.794785 },
+    { id:24, name:"ASE Technology", category:"packaging", role:"半導体の後工程（パッケージング・テスト）で世界最大手のOSAT企業。", address:"台湾・高雄市", lat:22.7130414, lng:120.3012974 },
+    { id:25, name:"PSMC（力晶積成電子）", category:"foundry", role:"台湾の大手ファウンドリ。DRAM受託生産でも知られる。", address:"台湾・新竹市", lat:24.7698161, lng:121.017640 },
+    { id:26, name:"VIS（世界先進）", category:"foundry", role:"TSMC系列の成熟プロセス向けファウンドリ。", address:"台湾・新竹市", lat:24.7755954, lng:120.9962272 },
+    { id:27, name:"Tower Semiconductor", category:"foundry", role:"アナログ・RF特殊プロセスに強いイスラエルのファウンドリ。", address:"イスラエル・ミグダルハエメク", lat:32.6889282, lng:35.2496994 },
+    { id:28, name:"Hua Hong Semiconductor（華虹半導体）", category:"foundry", role:"中国の大手ファウンドリ。成熟プロセスのパワー半導体等に強み。", address:"中国・上海市浦東新区", lat:31.077050, lng:121.614690 },
+    { id:29, name:"DB HiTek", category:"foundry", role:"韓国のアナログ半導体ファウンドリ大手。", address:"韓国・京畿道富川市", lat:37.5132055, lng:126.7776793 },
+    { id:30, name:"onsemi（ON Semiconductor）", category:"idm", role:"車載・産業向けパワー半導体大手のIDM。", address:"米国・アリゾナ州スコッツデール", lat:33.519555, lng:-111.8893787 },
+    { id:31, name:"Skyworks Solutions", category:"idm", role:"スマートフォン向けRFフロントエンドの大手メーカー。", address:"米国・カリフォルニア州アーバイン", lat:33.6382214, lng:-117.8500858 },
+    { id:32, name:"Qorvo", category:"idm", role:"通信機器向けRF半導体大手。", address:"米国・ノースカロライナ州グリーンズボロ", lat:36.0763408, lng:-79.9651702 },
+    { id:33, name:"Western Digital", category:"memory", role:"HDD・NANDフラッシュ大手メーカー。", address:"米国・カリフォルニア州サンノゼ", lat:37.2478428, lng:-121.7922305 },
+    { id:34, name:"Nanya Technology", category:"memory", role:"台湾のDRAM専業メーカー。", address:"台湾・新北市泰山区", lat:25.0482461, lng:121.4149629 },
+    { id:35, name:"Winbond Electronics", category:"memory", role:"ニッチメモリ大手の台湾メーカー。", address:"台湾・台中市大雅区", lat:24.211258, lng:120.6187403 },
+    { id:36, name:"Advantest", category:"equipment", role:"半導体テスタ（検査装置）で世界トップクラスの日本メーカー。", address:"日本・東京都千代田区丸の内", lat:35.684129, lng:139.766408 },
+    { id:37, name:"Kokusai Electric", category:"equipment", role:"成膜装置（バッチ式ALD/CVD）大手の日本メーカー。", address:"日本・東京都千代田区大手町", lat:35.6870985, lng:139.764569 },
+    { id:38, name:"DISCO Corporation", category:"equipment", role:"ダイシング・グラインディング装置で世界トップシェアの日本メーカー。", address:"日本・東京都大田区大森北", lat:35.5869987, lng:139.7340013 },
+    { id:39, name:"Hitachi High-Tech", category:"equipment", role:"エッチング装置・計測装置を手がける日立グループ企業。", address:"日本・東京都港区虎ノ門", lat:35.6678308, lng:139.7500294 },
+    { id:40, name:"Teradyne", category:"equipment", role:"半導体テスタの大手メーカー。", address:"米国・マサチューセッツ州ノースリーディング", lat:42.555557, lng:-71.1355754 },
+    { id:41, name:"ASM International", category:"equipment", role:"成膜装置（ALD）に強いオランダの装置メーカー。", address:"オランダ・アルメレ", lat:52.3492058, lng:5.1896035 },
+    { id:42, name:"Canon", category:"equipment", role:"半導体露光装置を手がける日本の精密機器メーカー。", address:"日本・東京都大田区下丸子", lat:35.5665592, lng:139.6822227 },
+    { id:43, name:"Nikon", category:"equipment", role:"半導体露光装置を手がける日本の光学機器メーカー。", address:"日本・東京都品川区西大井", lat:35.6024721, lng:139.7245013 },
+    { id:44, name:"Veeco Instruments", category:"equipment", role:"MOCVD・イオンビーム装置などを手がける米国の装置メーカー。", address:"米国・ニューヨーク州プレインビュー", lat:40.7921371, lng:-73.465805 },
+    { id:45, name:"Axcelis Technologies", category:"equipment", role:"イオン注入装置の大手メーカー。", address:"米国・マサチューセッツ州ビバリー", lat:42.5742381, lng:-70.9060561 },
+    { id:46, name:"Onto Innovation", category:"equipment", role:"検査・計測装置メーカー。", address:"米国・マサチューセッツ州ウィルミントン", lat:42.5955558, lng:-71.1504793 },
+    { id:47, name:"Aixtron", category:"equipment", role:"化合物半導体向けMOCVD装置のドイツメーカー。", address:"ドイツ・ヘルツォーゲンラート", lat:50.823408, lng:6.0793379 },
+    { id:48, name:"EV Group", category:"equipment", role:"ウェハ接合・リソグラフィ装置のオーストリアメーカー。", address:"オーストリア・ザンクトフローリアン", lat:48.4305828, lng:13.4449354 },
+    { id:49, name:"SUSS MicroTec", category:"equipment", role:"フォトリソグラフィ関連装置のドイツメーカー。", address:"ドイツ・ガルヒング", lat:48.2504553, lng:11.6238692 },
+    { id:50, name:"ASMPT", category:"equipment", role:"後工程（実装・ボンディング）装置の大手香港メーカー。", address:"香港・青衣", lat:22.3516161, lng:114.1098191 },
+    { id:51, name:"AMD", category:"fabless", role:"CPU・GPUを設計する米国のファブレス半導体大手。", address:"米国・カリフォルニア州サンタクララ", lat:37.3829254, lng:-121.9703842 },
+    { id:52, name:"MediaTek", category:"fabless", role:"スマートフォン向けSoCで世界大手の台湾ファブレス企業。", address:"台湾・新竹市", lat:24.7722707, lng:121.0232623 },
+    { id:53, name:"Marvell Technology", category:"fabless", role:"データインフラ向け半導体を手がけるファブレス企業。", address:"米国・カリフォルニア州サンタクララ", lat:37.4118299, lng:-121.9821463 },
+    { id:54, name:"Realtek Semiconductor", category:"fabless", role:"ネットワーク・オーディオICで知られる台湾ファブレス企業。", address:"台湾・新竹県宝山郷", lat:24.7805279, lng:120.9955132 },
+    { id:55, name:"Novatek Microelectronics", category:"fabless", role:"ディスプレイドライバICで世界大手の台湾ファブレス企業。", address:"台湾・新竹県宝山郷", lat:24.7759561, lng:120.9972366 },
+    { id:56, name:"Himax Technologies", category:"fabless", role:"ディスプレイドライバ・センサで知られる台湾ファブレス企業。", address:"台湾・台南市新市区", lat:23.1018845, lng:120.2618031 },
+    { id:57, name:"Cirrus Logic", category:"fabless", role:"オーディオ・電源管理ICに強い米国ファブレス企業。", address:"米国・テキサス州オースティン", lat:30.2712996, lng:-97.7505745 },
+    { id:58, name:"Synaptics", category:"fabless", role:"タッチ・指紋センサICで知られる米国ファブレス企業。", address:"米国・カリフォルニア州サンノゼ", lat:37.3902941, lng:-121.8927959 },
+    { id:59, name:"Lattice Semiconductor", category:"fabless", role:"低消費電力FPGAに強い米国ファブレス企業。", address:"米国・オレゴン州ヒルズボロ", lat:45.5270866, lng:-122.9250988 },
+    { id:60, name:"Rockchip", category:"fabless", role:"タブレット・IoT向けSoCを手がける中国ファブレス企業。", address:"中国・福建省福州市", lat:26.113208, lng:119.270569 },
+    { id:61, name:"UNISOC（紫光展鋭）", category:"fabless", role:"スマートフォン向けSoCを手がける中国ファブレス企業。", address:"中国・上海市浦東新区", lat:31.199280, lng:121.581920 },
+    { id:62, name:"Macronix International", category:"memory", role:"NOR型フラッシュメモリで世界大手の台湾メーカー。", address:"台湾・新竹市", lat:24.7674628, lng:121.0251782 },
+    { id:63, name:"Arm Holdings", category:"fabless", role:"CPUコア設計のIPライセンスを手がける英国企業。", address:"英国・ケンブリッジ", lat:52.1817207, lng:0.1790854 },
+    { id:64, name:"Phison Electronics", category:"fabless", role:"SSD・NANDコントローラで世界大手の台湾ファブレス企業。", address:"台湾・苗栗県竹南鎮", lat:24.7191373, lng:120.9110611 },
+    { id:65, name:"Analog Devices", category:"idm", role:"高性能アナログ半導体大手の米国IDM。", address:"米国・マサチューセッツ州ウィルミントン", lat:42.5312744, lng:-71.1462043 },
+    { id:66, name:"Microchip Technology", category:"idm", role:"マイコン・アナログ半導体大手の米国IDM。", address:"米国・アリゾナ州チャンドラー", lat:33.3041648, lng:-111.8836135 },
+    { id:67, name:"ROHM Semiconductor", category:"idm", role:"パワー半導体・アナログICに強い日本のIDM。", address:"日本・京都府京都市下京区", lat:34.9874227, lng:135.7583921 },
+    { id:68, name:"Sony Semiconductor Solutions", category:"idm", role:"CMOSイメージセンサで世界トップシェアの日本メーカー。", address:"日本・神奈川県厚木市", lat:35.4331968, lng:139.3684173 },
+    { id:69, name:"Toshiba Electronic Devices", category:"idm", role:"パワー半導体・ディスクリートを手がける日本のIDM。", address:"日本・神奈川県川崎市幸区", lat:35.535327, lng:139.699729 },
+    { id:70, name:"Mitsubishi Electric（パワーデバイス）", category:"idm", role:"パワー半導体の大手日本メーカー。", address:"日本・福岡市西区今宿東", lat:33.5774634, lng:130.2754046 },
+    { id:71, name:"Fuji Electric", category:"idm", role:"パワー半導体・産業機器の大手日本メーカー。", address:"日本・東京都品川区大崎", lat:35.6186568, lng:139.7319037 },
+    { id:72, name:"Wolfspeed", category:"idm", role:"SiCパワー半導体に強い米国メーカー。", address:"米国・ノースカロライナ州ダーラム", lat:35.9004323, lng:-78.8422093 },
+    { id:73, name:"Vishay Intertechnology", category:"idm", role:"ディスクリート半導体・受動部品大手の米国メーカー。", address:"米国・ペンシルベニア州マルバーン", lat:40.0446615, lng:-75.5280656 },
+    { id:74, name:"Diodes Incorporated", category:"idm", role:"ディスクリート半導体・アナログICの米国メーカー。", address:"米国・テキサス州プレイノ", lat:33.0832701, lng:-96.7999171 },
+    { id:75, name:"Melexis", category:"idm", role:"車載センサICに強いベルギーのメーカー。", address:"ベルギー・テッセンデルロ", lat:51.0692959, lng:5.1442173 },
+    { id:76, name:"Power Integrations", category:"idm", role:"電源ICの米国メーカー。", address:"米国・カリフォルニア州サンノゼ", lat:37.2704755, lng:-121.7935324 },
+    { id:77, name:"Amkor Technology", category:"packaging", role:"半導体パッケージング・テストで世界大手の米国OSAT企業。", address:"米国・アリゾナ州テンピ", lat:33.3355393, lng:-111.8989716 },
+    { id:78, name:"JCET Group", category:"packaging", role:"中国最大の半導体パッケージング・テスト企業。", address:"中国・江蘇省江陰市", lat:31.922531, lng:120.275515 },
+    { id:79, name:"Powertech Technology（PTI）", category:"packaging", role:"メモリ向けパッケージングに強い台湾OSAT企業。", address:"台湾・新竹県湖口郷", lat:24.8693044, lng:120.9983556 },
+    { id:80, name:"Tongfu Microelectronics", category:"packaging", role:"中国の大手半導体パッケージング企業。", address:"中国・江蘇省南通市", lat:31.97194, lng:120.876379 },
+    { id:81, name:"King Yuan Electronics", category:"packaging", role:"半導体テストサービスで知られる台湾企業。", address:"台湾・新竹市東区", lat:24.797744, lng:121.007378 },
+    { id:82, name:"Shin-Etsu Chemical", category:"materials", role:"シリコンウェハで世界最大手の日本の化学メーカー。", address:"日本・東京都千代田区丸の内", lat:35.684356, lng:139.764932 },
+    { id:83, name:"SUMCO Corporation", category:"materials", role:"シリコンウェハで世界トップクラスの日本メーカー。", address:"日本・東京都港区芝浦", lat:35.6499553, lng:139.7567912 },
+    { id:84, name:"GlobalWafers", category:"materials", role:"シリコンウェハ大手の台湾メーカー。", address:"台湾・新竹市東区", lat:24.777708, lng:121.006073 },
+    { id:85, name:"Siltronic", category:"materials", role:"シリコンウェハ大手のドイツメーカー。", address:"ドイツ・ミュンヘン", lat:48.1370647, lng:11.623104 },
+    { id:86, name:"SK Siltron", category:"materials", role:"シリコンウェハを手がける韓国SKグループのメーカー。", address:"韓国・慶尚北道亀尾市", lat:36.0930974, lng:128.4123874 },
+    { id:87, name:"JSR Corporation", category:"materials", role:"フォトレジストで世界大手の日本の化学メーカー。", address:"日本・東京都港区東新橋", lat:35.6624028, lng:139.760061 },
+    { id:88, name:"Tokyo Ohka Kogyo（TOK）", category:"materials", role:"フォトレジストで世界大手の日本の化学メーカー。", address:"日本・神奈川県川崎市中原区", lat:35.5707221, lng:139.6611619 },
+    { id:89, name:"Resonac", category:"materials", role:"半導体材料を手がける日本の化学メーカー。", address:"日本・東京都港区東新橋", lat:35.6630958, lng:139.7611931 },
+    { id:90, name:"Entegris", category:"materials", role:"半導体材料・ウェハ搬送容器の米国メーカー。", address:"米国・マサチューセッツ州ビレリカ", lat:42.5478549, lng:-71.2858294 },
+    { id:91, name:"Air Liquide", category:"materials", role:"半導体製造プロセス向け産業ガスの仏大手メーカー。", address:"フランス・パリ", lat:48.8620542, lng:2.3045611 },
+    { id:92, name:"Linde", category:"materials", role:"半導体製造プロセス向け産業ガスの大手メーカー。", address:"英国・ウォーキング", lat:51.3185386, lng:-0.5621150 },
+    { id:93, name:"Soitec", category:"materials", role:"SOIウェハで知られる仏の半導体材料メーカー。", address:"フランス・ベルナン", lat:45.2624314, lng:5.8784943 },
+    { id:94, name:"DuPont Electronics", category:"materials", role:"半導体材料を手がける米国化学メーカー。", address:"米国・デラウェア州ウィルミントン", lat:39.7551052, lng:-75.6047247 },
+    { id:95, name:"Synopsys", category:"eda", role:"EDAツールで世界最大手の米国企業。", address:"米国・カリフォルニア州サニーベール", lat:37.3979952, lng:-122.0323945 },
+    { id:96, name:"Cadence Design Systems", category:"eda", role:"EDAツール大手の米国企業。", address:"米国・カリフォルニア州サンノゼ", lat:37.3957514, lng:-121.919674 },
+    { id:97, name:"Siemens EDA", category:"eda", role:"EDAツールを手がけるシーメンス傘下の企業。", address:"米国・オレゴン州ウィルソンビル", lat:45.3187316, lng:-122.7627068 },
+    { id:98, name:"LX Semicon", category:"idm", role:"ディスプレイドライバICを手がける韓国メーカー。", address:"韓国・ソウル特別市江南区", lat:37.4852903, lng:127.0366379 },
+    { id:99, name:"Magnachip Semiconductor", category:"idm", role:"パワー半導体・ディスプレイドライバの韓国メーカー。", address:"韓国・忠清北道清州市", lat:36.6528282, lng:127.4345637 },
+    { id:100, name:"ams-OSRAM", category:"idm", role:"光センサ・LEDに強いオーストリアのメーカー。", address:"オーストリア・プレムシュテッテン", lat:46.9754813, lng:15.3943138 },
+    { id:101, name:"Elmos Semiconductor", category:"idm", role:"車載アナログ半導体のドイツメーカー。", address:"ドイツ・ドルトムント", lat:51.4935764, lng:7.4040542 },
+    { id:102, name:"Bosch（Bosch Sensortec）", category:"idm", role:"車載・MEMSセンサ半導体の独ボッシュグループ企業。", address:"ドイツ・ロイトリンゲン", lat:48.4964677, lng:9.1370544 },
+    { id:103, name:"IQE plc", category:"materials", role:"化合物半導体ウェハの英国メーカー。", address:"英国・カーディフ", lat:51.5308149, lng:-3.0863036 },
+    { id:104, name:"Allegro MicroSystems", category:"idm", role:"車載向け磁気センサICの米国メーカー。", address:"米国・ニューハンプシャー州マンチェスター", lat:42.939659, lng:-71.4450551 },
+    { id:105, name:"Monolithic Power Systems", category:"idm", role:"電源管理ICの米国メーカー。", address:"米国・ワシントン州カークランド", lat:47.660038, lng:-122.2054092 },
+    { id:106, name:"SiTime", category:"idm", role:"MEMS発振器の米国メーカー。", address:"米国・カリフォルニア州サンタクララ", lat:37.4099922, lng:-121.9840927 },
+    { id:107, name:"Kulicke & Soffa", category:"equipment", role:"ワイヤボンダなど後工程装置のシンガポール拠点メーカー。", address:"シンガポール", lat:1.3754563, lng:103.8740781 },
+    { id:108, name:"Unisem", category:"packaging", role:"マレーシアの大手半導体パッケージング・テスト企業。", address:"マレーシア・イポー", lat:4.5224496, lng:101.1256104 },
+    { id:109, name:"Silicon Labs", category:"fabless", role:"IoT向けワイヤレス半導体の米国ファブレス企業。", address:"米国・テキサス州オースティン", lat:30.264929, lng:-97.7485031 },
+    { id:110, name:"MaxLinear", category:"fabless", role:"通信・ネットワーキング向け半導体の米国ファブレス企業。", address:"米国・カリフォルニア州カールスバッド", lat:33.1318608, lng:-117.2696643 },
+    { id:111, name:"YMTC（長江存儲）", category:"memory", role:"NAND型フラッシュメモリの中国大手メーカー。", address:"中国・湖北省武漢市", lat:30.46179, lng:114.60784 },
+    { id:112, name:"Edwards Vacuum", category:"equipment", role:"真空ポンプ大手の英国メーカー。半導体製造プロセスに必須の技術。", address:"英国・バージェスヒル", lat:50.9534567, lng:-0.1564799 },
+    { id:113, name:"Pfeiffer Vacuum", category:"equipment", role:"真空技術のドイツメーカー。", address:"ドイツ・アスラー", lat:50.583216, lng:8.473827 },
+    { id:114, name:"Ebara Corporation", category:"equipment", role:"CMP（化学機械研磨）装置などを手がける日本メーカー。", address:"日本・東京都大田区羽田", lat:35.5521408, lng:139.752349 },
+    { id:115, name:"ULVAC", category:"equipment", role:"真空成膜装置の大手日本メーカー。", address:"日本・神奈川県茅ヶ崎市", lat:35.3390021, lng:139.3791984 },
+    { id:116, name:"Tokyo Seimitsu（Accretech）", category:"equipment", role:"ダイシング・プローバ装置の日本メーカー。", address:"日本・東京都八王子市", lat:35.6717009, lng:139.3653397 },
+    { id:117, name:"Mattson Technology", category:"equipment", role:"熱処理・エッチング装置の米国メーカー。", address:"米国・カリフォルニア州フリーモント", lat:37.475363, lng:-121.9373365 },
+    { id:118, name:"Aehr Test Systems", category:"equipment", role:"半導体バーンイン試験装置の米国メーカー。", address:"米国・カリフォルニア州フリーモント", lat:37.4655581, lng:-121.918802 },
+    { id:119, name:"Cohu", category:"equipment", role:"テストハンドラの米国メーカー。", address:"米国・カリフォルニア州パウェイ", lat:32.9440231, lng:-117.0402832 },
+    { id:120, name:"inTEST Corporation", category:"equipment", role:"半導体テスト関連装置の米国メーカー。", address:"米国・ニュージャージー州マウントローレル", lat:39.9437341, lng:-74.9497135 },
+    { id:121, name:"FormFactor", category:"equipment", role:"プローブカードで世界大手の米国メーカー。", address:"米国・カリフォルニア州リバモア", lat:37.7145579, lng:-121.7080012 },
+    { id:122, name:"Camtek", category:"equipment", role:"検査装置のイスラエルメーカー。", address:"イスラエル・ミグダルハエメク", lat:32.684753, lng:35.2503684 },
+    { id:123, name:"Nova Ltd", category:"equipment", role:"計測装置のイスラエルメーカー。", address:"イスラエル・レホヴォト", lat:31.9157182, lng:34.8096697 },
+    { id:124, name:"Ultra Clean Holdings", category:"equipment", role:"装置サブシステムを手がける米国メーカー。", address:"米国・カリフォルニア州ヘイワード", lat:37.6275768, lng:-122.111706 },
+    { id:125, name:"PVA TePla", category:"equipment", role:"単結晶引き上げ装置等のドイツメーカー。", address:"ドイツ・ヴェッテンベルク", lat:50.6080756, lng:8.6499491 },
+    { id:126, name:"Oxford Instruments Plasma Technology", category:"equipment", role:"プラズマエッチング装置の英国メーカー。", address:"英国・ブリストル", lat:51.5518475, lng:-2.6577397 },
+    { id:127, name:"BE Semiconductor Industries（Besi）", category:"equipment", role:"後工程実装装置のオランダメーカー。", address:"オランダ・ダウフェン", lat:51.960523, lng:6.019748 },
+    { id:128, name:"Shibaura Mechatronics", category:"equipment", role:"成膜・エッチング装置の日本メーカー。", address:"日本・神奈川県横浜市栄区", lat:35.3554275, lng:139.5351068 },
+    { id:129, name:"ACM Research", category:"equipment", role:"洗浄装置の米中系メーカー。", address:"米国・カリフォルニア州フリーモント", lat:37.5267367, lng:-121.9515873 },
+    { id:130, name:"Brooks Automation", category:"equipment", role:"ウェハ搬送ロボットの米国メーカー。", address:"米国・マサチューセッツ州チェルムズフォード", lat:42.5865481, lng:-71.3227711 },
+    { id:131, name:"Nordson Electronics Solutions", category:"equipment", role:"ディスペンス装置（封止材塗布等）の米国メーカー。", address:"米国・オハイオ州ウェストレイク", lat:41.4684106, lng:-81.9390954 },
+    { id:132, name:"Mycronic", category:"equipment", role:"実装装置・マスク描画装置のスウェーデンメーカー。", address:"スウェーデン・タビー", lat:59.4364781, lng:18.07793 },
+    { id:133, name:"Jusung Engineering", category:"equipment", role:"成膜装置の韓国メーカー。", address:"韓国・京畿道広州市", lat:37.3491593, lng:127.1873691 },
+    { id:134, name:"Hanmi Semiconductor", category:"equipment", role:"後工程装置（TCボンダ等）の韓国メーカー。HBM向けで存在感。", address:"韓国・仁川広域市", lat:37.4754574, lng:126.6799455 },
+    { id:135, name:"SFA Engineering", category:"equipment", role:"ディスプレイ・半導体製造装置の韓国メーカー。", address:"韓国・忠清南道牙山市", lat:36.8942542, lng:127.0118954 },
+    { id:136, name:"SCREEN Holdings", category:"equipment", role:"洗浄装置で世界トップシェアの日本メーカー（本社）。", address:"日本・京都府京都市上京区", lat:35.0373186, lng:135.7513471 },
+    { id:137, name:"Mitsubishi Gas Chemical", category:"materials", role:"半導体関連化学品を手がける日本の化学メーカー。", address:"日本・東京都千代田区丸の内", lat:35.6799738, lng:139.7636576 },
+    { id:138, name:"Sumitomo Bakelite", category:"materials", role:"半導体封止材で世界大手の日本の化学メーカー。", address:"日本・東京都品川区東品川", lat:35.6212633, lng:139.7501361 },
+    { id:139, name:"Denka", category:"materials", role:"特殊ガス・セラミックス材料を手がける日本の化学メーカー。", address:"日本・東京都中央区日本橋室町", lat:35.6869176, lng:139.7731321 },
+    { id:140, name:"Stella Chemifa", category:"materials", role:"フッ素化学品（エッチングガス等）の日本メーカー。", address:"日本・大阪府大阪市中央区", lat:34.6893521, lng:135.5001695 },
+    { id:141, name:"Daikin Industries", category:"materials", role:"フッ素化学品を手がける日本の総合化学メーカー。", address:"日本・大阪府大阪市北区", lat:34.7013115, lng:135.497819 },
+    { id:142, name:"Mitsui Chemicals", category:"materials", role:"半導体関連材料を手がける日本の化学メーカー。", address:"日本・東京都中央区八重洲", lat:35.6790625, lng:139.7692583 },
+    { id:143, name:"Honeywell Electronic Materials", category:"materials", role:"半導体材料を手がける米国の電子材料メーカー。", address:"米国・アリゾナ州チャンドラー", lat:33.3009335, lng:-111.9593766 },
+    { id:144, name:"Merck KGaA", category:"materials", role:"半導体材料・特殊化学品の独大手メーカー。", address:"ドイツ・ダルムシュタット", lat:49.8950639, lng:8.6530293 },
+    { id:145, name:"BASF", category:"materials", role:"半導体プロセス化学品を手がける欧州最大の化学メーカー。", address:"ドイツ・ルートヴィヒスハーフェン", lat:49.5302388, lng:8.422338 },
+    { id:146, name:"Wacker Chemie", category:"materials", role:"ポリシリコン・シリコーンの独化学メーカー。", address:"ドイツ・ミュンヘン", lat:48.1237548, lng:11.6050328 },
+    { id:147, name:"Hemlock Semiconductor", category:"materials", role:"高純度ポリシリコンの米国メーカー。", address:"米国・ミシガン州ヘムロック", lat:43.432375, lng:-84.1625845 },
+    { id:148, name:"OCI Company", category:"materials", role:"ポリシリコンを手がける韓国の化学メーカー。", address:"韓国・ソウル特別市中区", lat:37.5633129, lng:126.9804576 },
+    { id:149, name:"Tokuyama Corporation", category:"materials", role:"ポリシリコンの日本の化学メーカー。", address:"日本・東京都千代田区外神田", lat:35.69958, lng:139.770005 },
+    { id:150, name:"REC Silicon", category:"materials", role:"ポリシリコンの米国メーカー。", address:"米国・ワシントン州モーゼスレイク", lat:47.1346572, lng:-119.1935431 },
+    { id:151, name:"Taiyo Nippon Sanso", category:"materials", role:"半導体製造プロセス向け産業ガスの日本メーカー。", address:"日本・東京都品川区小山", lat:35.6223989, lng:139.7114816 },
+    { id:152, name:"Adeka Corporation", category:"materials", role:"半導体材料（EUV用フォトレジスト材料等）を手がける日本の化学メーカー。", address:"日本・東京都荒川区東尾久", lat:35.7523195, lng:139.7715352 },
+    { id:153, name:"Fujifilm（電子材料）", category:"materials", role:"フォトレジスト・CMPスラリー等の半導体材料を手がける日本メーカー。", address:"日本・東京都港区赤坂", lat:35.665567, lng:139.730495 },
+    { id:154, name:"Ferrotec Holdings", category:"materials", role:"シリコン部材・石英部材の日本メーカー。", address:"日本・東京都中央区日本橋", lat:35.68138, lng:139.7721134 },
+    { id:155, name:"Toray Industries", category:"materials", role:"半導体関連材料を手がける日本の総合素材メーカー。", address:"日本・東京都中央区日本橋室町", lat:35.6867956, lng:139.7729814 },
+    { id:156, name:"Atotech", category:"materials", role:"めっき薬品（半導体パッケージング向け含む）のドイツメーカー。", address:"ドイツ・ベルリン", lat:52.5259105, lng:13.3276626 },
+    { id:157, name:"Ansys", category:"eda", role:"シミュレーションソフトウェアの米国大手（Synopsysが買収）。", address:"米国・ペンシルベニア州キャノンズバーグ", lat:40.2717954, lng:-80.1663374 },
+    { id:158, name:"Keysight Technologies", category:"eda", role:"半導体テスト・計測機器の米国大手。", address:"米国・カリフォルニア州サンタローザ", lat:38.4817932, lng:-122.7115563 },
+    { id:159, name:"Zuken", category:"eda", role:"基板設計・EDAツールの日本メーカー。", address:"日本・神奈川県横浜市都筑区", lat:35.540637, lng:139.566236 },
+    { id:160, name:"Chipbond Technology", category:"packaging", role:"ディスプレイドライバIC等のパッケージングに強い台湾OSAT企業。", address:"台湾・新竹市", lat:24.7646441, lng:121.0201994 },
+    { id:161, name:"Greatek Electronics", category:"packaging", role:"半導体パッケージングの台湾企業。", address:"台湾・苗栗県竹南鎮", lat:24.6967282, lng:120.8818126 },
+    { id:162, name:"ChipMOS Technologies", category:"packaging", role:"メモリ・ディスプレイドライバ向けパッケージングの台湾企業。", address:"台湾・新竹市", lat:24.77629, lng:121.0019927 },
+    { id:163, name:"Walton Advanced Engineering", category:"packaging", role:"メモリパッケージングの台湾企業。", address:"台湾・高雄市", lat:22.6059971, lng:120.287926 },
+    { id:164, name:"Hana Microelectronics", category:"packaging", role:"東南アジア大手の半導体パッケージング企業。", address:"タイ・バンコク", lat:13.8739862, lng:100.5781092 },
+    { id:165, name:"Inari Amertron", category:"packaging", role:"マレーシアの半導体パッケージング・テスト企業。", address:"マレーシア・ペナン州", lat:5.2257419, lng:100.4445628 },
+    { id:166, name:"UTAC Group", category:"packaging", role:"シンガポール拠点の半導体パッケージング・テスト企業。", address:"シンガポール", lat:1.3739621, lng:103.8679656 },
+    { id:167, name:"Lingsen Precision", category:"packaging", role:"半導体パッケージングの台湾企業。", address:"台湾・台中市", lat:24.2175279, lng:120.7014411 },
+    { id:168, name:"Sigurd Corp", category:"packaging", role:"ディスクリート半導体パッケージングの台湾企業。", address:"台湾・新竹県竹東鎮", lat:24.7333375, lng:121.0990736 },
+    { id:169, name:"CG Power and Industrial Solutions", category:"packaging", role:"半導体パッケージング進出を進めるインドの電機メーカー。", address:"インド・ムンバイ", lat:19.1288878, lng:72.9296768 },
+    { id:170, name:"Innodisk", category:"memory", role:"産業用フラッシュストレージの台湾メーカー。", address:"台湾・新北市汐止区", lat:25.0587413, lng:121.6344518 },
+    { id:171, name:"ADATA Technology", category:"memory", role:"メモリモジュール・SSDの台湾大手メーカー。", address:"台湾・台北市内湖区", lat:25.0611139, lng:121.5994151 },
+    { id:172, name:"Apacer Technology", category:"memory", role:"メモリモジュールの台湾メーカー。", address:"台湾・新北市土城区", lat:24.9654399, lng:121.4386225 },
+    { id:173, name:"Transcend Information", category:"memory", role:"メモリ・ストレージ製品の台湾大手メーカー。", address:"台湾・台北市内湖区", lat:25.0663865, lng:121.5807797 },
+    { id:174, name:"Apple", category:"fabless", role:"自社設計SoC（Apple Silicon）を手がける米国企業。製造はTSMC等に委託。", address:"米国・カリフォルニア州クパチーノ", lat:37.3346438, lng:-122.008972 },
+    { id:175, name:"Google", category:"fabless", role:"AI半導体（TPU）等の自社設計を手がける米国企業。", address:"米国・カリフォルニア州マウンテンビュー", lat:37.4220541, lng:-122.0853242 },
+    { id:176, name:"Amazon", category:"fabless", role:"クラウド向け自社設計半導体（Graviton等）を手がける米国企業。", address:"米国・ワシントン州シアトル", lat:47.6227501, lng:-122.3367548 },
+    { id:177, name:"Microsoft", category:"fabless", role:"AI半導体（Maia等）の自社設計を手がける米国企業。", address:"米国・ワシントン州レドモンド", lat:47.6458093, lng:-122.1319698 },
+    { id:178, name:"Meta", category:"fabless", role:"AI推論向け自社半導体を手がける米国企業。", address:"米国・カリフォルニア州メンローパーク", lat:37.485073, lng:-122.1482824 },
+    { id:179, name:"Tesla", category:"fabless", role:"自動運転・AI向け自社設計半導体を手がける米国企業。", address:"米国・テキサス州オースティン", lat:30.2248156, lng:-97.619548 },
+    { id:180, name:"Graphcore", category:"fabless", role:"AI向けIPU（知能処理ユニット）を手がける英国ファブレス企業。", address:"英国・ブリストル", lat:51.4552921, lng:-2.5923879 },
+    { id:181, name:"Cerebras Systems", category:"fabless", role:"超大型AIチップ（ウェハスケールエンジン）の米国ファブレス企業。", address:"米国・カリフォルニア州サニーベール", lat:37.3814012, lng:-121.9927608 },
+    { id:182, name:"Groq", category:"fabless", role:"AI推論向け専用チップ（LPU）の米国ファブレス企業。", address:"米国・カリフォルニア州サンノゼ", lat:37.3916934, lng:-121.9260233 },
+    { id:183, name:"SambaNova Systems", category:"fabless", role:"AI向けチップ・システムの米国ファブレス企業。", address:"米国・カリフォルニア州サンノゼ", lat:37.3826106, lng:-121.9239195 },
+    { id:184, name:"Ambarella", category:"fabless", role:"カメラ向け画像処理SoCの米国ファブレス企業。", address:"米国・カリフォルニア州サンタクララ", lat:37.4042878, lng:-121.9807988 },
+    { id:185, name:"Semtech", category:"fabless", role:"アナログ・ミックスドシグナル半導体の米国ファブレス企業。", address:"米国・カリフォルニア州カマリロ", lat:34.218202, lng:-119.020936 },
+    { id:186, name:"SiFive", category:"fabless", role:"RISC-VプロセッサIPの米国ファブレス企業。", address:"米国・カリフォルニア州サンタクララ", lat:37.3826049, lng:-121.9751887 },
+    { id:187, name:"Ambiq Micro", category:"fabless", role:"超低消費電力マイコンの米国ファブレス企業。", address:"米国・テキサス州オースティン", lat:30.3967351, lng:-97.8516948 },
+    { id:188, name:"Credo Technology", category:"fabless", role:"高速接続半導体の米国ファブレス企業。", address:"米国・カリフォルニア州サンノゼ", lat:37.4032411, lng:-121.9472222 },
+    { id:189, name:"Astera Labs", category:"fabless", role:"データセンター向け接続半導体の米国ファブレス企業。", address:"米国・カリフォルニア州サンノゼ", lat:37.3800635, lng:-121.9243685 },
+    { id:190, name:"Socionext", category:"fabless", role:"画像・通信向けSoCを手がける日本のファブレス企業。", address:"日本・神奈川県横浜市港北区", lat:35.5073153, lng:139.6113858 },
+    { id:191, name:"Megachips", category:"fabless", role:"カスタムSoC設計の日本のファブレス企業。", address:"日本・大阪府大阪市淀川区", lat:34.7340232, lng:135.5000788 },
+    { id:192, name:"Nuvoton Technology", category:"fabless", role:"マイコン・IoT半導体の台湾ファブレス企業。", address:"台湾・新竹市", lat:24.7790114, lng:120.990678 },
+    { id:193, name:"indie Semiconductor", category:"fabless", role:"車載向け半導体の米国ファブレス企業。", address:"米国・カリフォルニア州アリソビエホ", lat:33.5675007, lng:-117.725979 },
+    { id:194, name:"Goodix Technology", category:"fabless", role:"指紋・タッチセンサICの中国ファブレス企業。", address:"中国・深圳市福田区", lat:22.5271756, lng:114.0427301 },
+    { id:195, name:"Panasonic（半導体ソリューション）", category:"idm", role:"車載・産業向け半導体を手がける日本のIDM。", address:"日本・東京都港区東新橋", lat:35.6658817, lng:139.7619351 },
+    { id:196, name:"Nichia", category:"idm", role:"青色LED発明で知られる化合物半導体の日本メーカー。", address:"日本・徳島県阿南市", lat:33.928655, lng:134.6160901 },
+    { id:197, name:"Asahi Kasei（マイクロデバイス）", category:"idm", role:"センサ・通信ICのアナログ半導体を手がける日本メーカー。", address:"日本・東京都千代田区有楽町", lat:35.6737468, lng:139.7592329 },
+    { id:198, name:"Lapis Semiconductor", category:"idm", role:"旧沖電気の半導体部門。マイコン・センサICを手がける。", address:"日本・神奈川県横浜市港北区", lat:35.5086053, lng:139.6158052 },
+    { id:199, name:"Nexperia", category:"idm", role:"ディスクリート半導体大手のオランダメーカー。", address:"オランダ・ナイメーヘン", lat:51.8245187, lng:5.8252136 },
+    { id:200, name:"Littelfuse", category:"idm", role:"回路保護半導体・部品の米国メーカー。", address:"米国・イリノイ州ローズモント", lat:41.9878026, lng:-87.8576607 },
+    { id:201, name:"Semikron Danfoss", category:"idm", role:"パワーモジュールのドイツメーカー。", address:"ドイツ・ニュルンベルク", lat:49.4411827, lng:11.0048907 },
+    { id:202, name:"Sanken Electric", category:"idm", role:"パワー半導体の日本メーカー。", address:"日本・埼玉県新座市", lat:35.8189202, lng:139.566454 },
+    { id:203, name:"Navitas Semiconductor", category:"idm", role:"GaN（窒化ガリウム）パワー半導体の米国メーカー。", address:"米国・カリフォルニア州トーランス", lat:33.8505349, lng:-118.3480369 },
+    { id:204, name:"Transphorm", category:"idm", role:"GaNパワー半導体の米国メーカー。", address:"米国・カリフォルニア州ゴリータ", lat:34.4335865, lng:-119.8626525 },
+    { id:205, name:"Efficient Power Conversion（EPC）", category:"idm", role:"GaNパワー半導体の米国メーカー。", address:"米国・カリフォルニア州エルセグンド", lat:33.9296931, lng:-118.3966587 },
+    { id:206, name:"China Resources Microelectronics", category:"idm", role:"パワー半導体を手がける中国大手メーカー。", address:"中国・江蘇省無錫市", lat:31.5634738, lng:120.2669096 },
+    { id:207, name:"Yangjie Technology", category:"idm", role:"ディスクリート半導体の中国メーカー。", address:"中国・江蘇省揚州市", lat:32.4417369, lng:119.4145851 },
+    { id:208, name:"BYD（半導体事業）", category:"idm", role:"車載パワー半導体を手がける中国の自動車・半導体大手。", address:"中国・広東省深圳市", lat:22.679251, lng:114.358854 },
+    { id:209, name:"Continental Device India（CDIL）", category:"idm", role:"ディスクリート半導体のインド老舗メーカー。", address:"インド・ニューデリー", lat:28.6273957, lng:77.1355411 },
+    { id:210, name:"Vedanta（半導体事業）", category:"foundry", role:"インドで半導体事業の立ち上げを進める印複合企業。", address:"インド・ムンバイ", lat:19.111406, lng:72.8592891 },
+    { id:211, name:"Tata Electronics", category:"foundry", role:"インド初の大規模ファウンドリ建設を進める印タタグループ企業。PSMCと協業。", address:"インド・グジャラート州ドーレラ", lat:22.2286835, lng:72.1980051 },
+    { id:212, name:"X-FAB", category:"foundry", role:"アナログ・特殊プロセス向けファウンドリの独メーカー。", address:"ドイツ・エアフルト", lat:50.9487329, lng:11.0870916 },
+    { id:213, name:"SkyWater Technology", category:"foundry", role:"米国のピュアプレイファウンドリ。", address:"米国・ミネソタ州ブルーミントン", lat:44.846391, lng:-93.2356285 },
+    { id:214, name:"Polar Semiconductor", category:"foundry", role:"パワー半導体ファウンドリの米国メーカー。", address:"米国・ミネソタ州ブルーミントン", lat:44.8533349, lng:-93.2311824 },
+    { id:215, name:"Silex Microsystems", category:"foundry", role:"MEMSファウンドリのスウェーデンメーカー。", address:"スウェーデン・ヤルファラ", lat:59.4103518, lng:17.8269972 },
+    { id:216, name:"Episil-Precision", category:"foundry", role:"パワー半導体ファウンドリの台湾メーカー。", address:"台湾・新竹市", lat:24.777619, lng:120.996058 },
+    { id:217, name:"IBM（半導体研究）", category:"foundry", role:"半導体研究拠点（アルバニーナノテク）を手がける米国IT大手。", address:"米国・ニューヨーク州オールバニ", lat:42.6906884, lng:-73.8325196 },
+    { id:218, name:"StarPower Semiconductor（斯達半導体）", category:"idm", role:"車載・産業向けIGBTモジュールの中国メーカー。", address:"中国・浙江省嘉興市", lat:30.724262, lng:120.835486 },
+    { id:219, name:"Wonik IPS（원익IPS）", category:"equipment", role:"成膜・エッチング装置の韓国メーカー。", address:"韓国・京畿道平沢市", lat:37.1251748, lng:127.0827811 },
+    { id:220, name:"Will Semiconductor（豪威集団）", category:"fabless", role:"イメージセンサ大手OmniVisionの親会社。中国のファブレス企業。", address:"中国・上海市浦東新区", lat:31.184839, lng:121.599981 },
+    { id:221, name:"Hansol Chemical", category:"materials", role:"半導体プロセス用化学品（CMPスラリー等）の韓国メーカー。", address:"韓国・全羅北道完州郡（全州工場）", lat:35.946381, lng:127.1223617 },
+    { id:222, name:"Busch Vacuum Solutions", category:"equipment", role:"真空ポンプの独大手メーカー。半導体製造プロセスに不可欠。", address:"ドイツ・マウルブルク", lat:47.6468968, lng:7.7897994 },
+    { id:223, name:"Leybold", category:"equipment", role:"真空ポンプ・真空技術の独大手メーカー。", address:"ドイツ・ケルン", lat:50.8995944, lng:6.9635331 },
+    { id:224, name:"Kashiyama Industries", category:"equipment", role:"ドライ真空ポンプの日本メーカー（荏原グループ）。", address:"日本・長野県佐久市", lat:36.256312, lng:138.4686683 },
+    { id:225, name:"Anest Iwata", category:"equipment", role:"真空ポンプ・コンプレッサの日本メーカー。", address:"日本・神奈川県横浜市港北区", lat:35.5350584, lng:139.6089302 },
+    { id:226, name:"SMC Corporation", category:"equipment", role:"空気圧制御機器・プロセスチラーで世界最大手の日本メーカー。", address:"日本・東京都中央区京橋", lat:35.6783031, lng:139.7700874 },
+    { id:227, name:"CKD Corporation", category:"equipment", role:"空気圧機器・プロセスチラーを手がける日本メーカー。", address:"日本・愛知県小牧市", lat:35.2794909, lng:136.9354395 },
+    { id:228, name:"Frigel Group", category:"equipment", role:"半導体製造プロセス向け産業用チラー（冷却装置）の伊メーカー。", address:"イタリア・スカンディッチ", lat:43.7661329, lng:11.1588862 },
+    { id:229, name:"HYDAC International", category:"equipment", role:"流体制御・冷却システムの独メーカー。", address:"ドイツ・ズルツバッハ", lat:49.2888625, lng:7.0707691 },
+    { id:230, name:"Orion Machinery", category:"equipment", role:"半導体製造プロセス向け産業用チラーの日本メーカー。", address:"日本・長野県須坂市", lat:36.6392658, lng:138.2883577 },
+    { id:231, name:"Mokon", category:"equipment", role:"プロセス温調機器（チラー等）の米国メーカー。", address:"米国・ニューヨーク州バッファロー", lat:42.9552719, lng:-78.8826523 },
+    { id:232, name:"Air Products and Chemicals", category:"materials", role:"半導体向け特殊ガスを手がける米国の産業ガス大手。", address:"米国・ペンシルベニア州アレンタウン", lat:40.5601798, lng:-75.5816215 },
+    { id:233, name:"Iwatani Corporation", category:"materials", role:"産業ガス・水素エネルギーの日本大手メーカー。", address:"日本・大阪府大阪市中央区", lat:34.6834083, lng:135.5010031 },
+    { id:234, name:"Messer Group", category:"materials", role:"欧州最大の非上場産業ガスメーカー。", address:"ドイツ・バートゾーデン", lat:50.1439688, lng:8.5037383 },
+    { id:235, name:"OCI Materials", category:"materials", role:"NF3等の半導体向け特殊ガスを手がける韓国メーカー（OCIグループ）。", address:"韓国・慶尚北道栄州市", lat:36.8247379, lng:128.5906406 },
+    { id:236, name:"Air Water Inc", category:"materials", role:"産業ガス・化学品の日本大手メーカー。", address:"日本・大阪府大阪市中央区", lat:34.6753983, lng:135.5040196 },
+    { id:237, name:"Matheson Tri-Gas", category:"materials", role:"半導体向け特殊ガスの米国メーカー（Taiyo Nippon Sanso系）。", address:"米国・ニュージャージー州ウォーレン", lat:40.6456742, lng:-74.5742467 },
+    { id:238, name:"Ebara Environmental Plant", category:"equipment", role:"排ガス除害装置（スクラバー）の日本メーカー（荏原グループ）。", address:"日本・東京都大田区羽田", lat:35.5520464, lng:139.7523138 },
+    { id:239, name:"DAS Environmental Expert", category:"equipment", role:"排ガス除害装置の独メーカー。", address:"ドイツ・ドレスデン", lat:51.0003339, lng:13.7625749 },
+    { id:240, name:"CS Clean Solutions", category:"equipment", role:"特殊ガス供給・排ガス処理システムの独メーカー。", address:"ドイツ・イスマニング", lat:48.2316477, lng:11.6806421 },
+    { id:241, name:"Global Standard Technology（GST）", category:"equipment", role:"排ガス除害装置の韓国メーカー。", address:"韓国・京畿道華城市", lat:37.1698843, lng:127.08787 },
+    { id:242, name:"Hanyang Eng", category:"equipment", role:"半導体クリーンルーム・排ガス処理設備の韓国メーカー。", address:"韓国・京畿道華城市", lat:37.2316938, lng:127.0688055 },
+    { id:243, name:"CECO Environmental", category:"equipment", role:"産業用排ガス処理装置の米国メーカー。", address:"米国・テキサス州アディソン", lat:32.9547958, lng:-96.8228302 },
+    { id:244, name:"centrotherm international", category:"equipment", role:"排ガス処理・フィルターシステムの独メーカー。", address:"ドイツ・ブラウボイレン", lat:48.4012101, lng:9.7857573 },
+    { id:245, name:"Applied Energy Systems", category:"equipment", role:"特殊ガス供給システムの米国メーカー。", address:"米国・ペンシルベニア州マルバーン", lat:40.0377372, lng:-75.5214914 },
+    { id:246, name:"Atlas Copco", category:"equipment", role:"真空ポンプ・圧縮機の世界最大手スウェーデンメーカー（Edwardsの親会社）。", address:"スウェーデン・ストックホルム（ナッカ）", lat:59.3040886, lng:18.1189565 },
+    { id:247, name:"Agilent Technologies", category:"equipment", role:"分析機器に加え真空ポンプ製品も手がける米国メーカー。", address:"米国・カリフォルニア州サンタクララ", lat:37.3248429, lng:-121.9989752 },
+    { id:248, name:"Shimadzu Corporation", category:"equipment", role:"ターボ分子ポンプ等を手がける日本の精密機器メーカー。", address:"日本・京都府京都市中京区", lat:35.0094252, lng:135.7288468 },
+    { id:249, name:"Becker Pumps", category:"equipment", role:"真空ポンプ・コンプレッサの独メーカー。", address:"ドイツ・ヴッパータール", lat:51.295827, lng:7.25665 },
+    { id:250, name:"Gardner Denver", category:"equipment", role:"真空ポンプ・圧縮機の米国メーカー。", address:"米国・ウィスコンシン州ミルウォーキー", lat:43.031814, lng:-87.908701 },
+    { id:251, name:"ANLET", category:"equipment", role:"ルーツ式真空ポンプの日本メーカー。", address:"日本・愛知県海部郡蟹江町", lat:35.1276859, lng:136.79187 },
+    { id:252, name:"Tuthill Vacuum & Blower（MD-Kinney）", category:"equipment", role:"真空ポンプの米国メーカー。", address:"米国・ミズーリ州スプリングフィールド", lat:37.2408375, lng:-93.3779653 },
+    { id:253, name:"Advantage Engineering", category:"equipment", role:"プロセスチラーの米国メーカー。", address:"米国・インディアナ州グリーンウッド", lat:39.5938224, lng:-86.0954043 },
+    { id:254, name:"Yamato Scientific", category:"equipment", role:"恒温・冷却機器（チラー含む）の日本メーカー。", address:"日本・東京都中央区晴海", lat:35.6564829, lng:139.7814239 },
+    { id:255, name:"Koyo Thermo Systems", category:"equipment", role:"半導体製造プロセス向け熱処理・温調機器の日本メーカー。", address:"日本・京都府京都市南区", lat:34.9666919, lng:135.7355911 },
+    { id:256, name:"Boyd Corporation", category:"equipment", role:"熱マネジメント・チラーシステムの米国メーカー。", address:"米国・カリフォルニア州プレザントン", lat:37.6878859, lng:-121.9013509 },
+    { id:257, name:"Julabo", category:"equipment", role:"高精度温調機器・チラーの独メーカー。", address:"ドイツ・ゼールバッハ", lat:48.3140563, lng:7.9364831 },
+    { id:258, name:"Lauda", category:"equipment", role:"精密温調・チラー機器の独メーカー。", address:"ドイツ・ラウダケーニヒスホーフェン", lat:49.5756643, lng:9.701033 },
+    { id:259, name:"Conair Group", category:"equipment", role:"プロセスチラー・温調機器の米国メーカー。", address:"米国・ペンシルベニア州クランベリータウンシップ", lat:40.711871, lng:-80.1174718 },
+    { id:260, name:"Single Temperature Controls（STC）", category:"equipment", role:"半導体プロセス向けチラーの米国メーカー。", address:"米国・ノースカロライナ州シャーロット", lat:35.1013243, lng:-80.9573392 },
+    { id:261, name:"Yingde Gases", category:"materials", role:"中国最大級の産業ガスメーカー。", address:"中国（香港オフィス表示）", lat:22.278223, lng:114.181507 },
+    { id:262, name:"Sumitomo Seika Chemicals", category:"materials", role:"水素等の特殊ガスを手がける日本の化学メーカー。", address:"日本・大阪府大阪市中央区", lat:34.692057, lng:135.499351 },
+    { id:263, name:"Hangzhou Hangyang", category:"materials", role:"産業ガス・空気分離装置の中国メーカー。", address:"中国・浙江省杭州市", lat:30.300067, lng:120.180098 },
+    { id:264, name:"Tomoe Shokai", category:"materials", role:"特殊ガス・化学品商社の日本メーカー。", address:"日本・東京都大田区蒲田本町", lat:35.5587423, lng:139.7175065 },
+    { id:265, name:"Pentagon Technologies", category:"equipment", role:"半導体製造装置の部品洗浄・再生サービスを手がける米国メーカー。", address:"米国・カリフォルニア州ヘイワード", lat:37.6517588, lng:-122.1317681 },
+    { id:266, name:"Riken Keiki", category:"equipment", role:"有毒ガス検知器の日本最大手メーカー。半導体工場の安全管理に必須。", address:"日本・東京都板橋区", lat:35.776098, lng:139.701169 },
+    { id:267, name:"New Cosmos Electric", category:"equipment", role:"ガス検知器の日本大手メーカー。", address:"日本・大阪府大阪市淀川区", lat:34.7271184, lng:135.470728 },
+    { id:268, name:"MSA Safety", category:"equipment", role:"ガス検知器・安全機器の米国大手メーカー。", address:"米国・ペンシルベニア州クランベリータウンシップ", lat:40.6765609, lng:-80.087334 },
+    { id:269, name:"Dragerwerk（Drager）", category:"equipment", role:"ガス検知器・安全機器の独大手メーカー。", address:"ドイツ・リューベック", lat:53.8572595, lng:10.670206 },
+    { id:270, name:"Honeywell Analytics", category:"equipment", role:"ガス検知器の米国大手メーカー（ハネウェル傘下）。", address:"米国・イリノイ州リンカンシャー", lat:42.1904554, lng:-87.935203 },
+    { id:271, name:"Industrial Scientific Corporation", category:"equipment", role:"ポータブルガス検知器の米国大手メーカー。", address:"米国・ペンシルベニア州ピッツバーグ", lat:40.4399276, lng:-80.1577728 },
+    { id:272, name:"Crowcon Detection Instruments", category:"equipment", role:"ガス検知器の英国メーカー。", address:"英国・アビンドン", lat:51.6239204, lng:-1.2832616 },
+    { id:273, name:"Sensidyne", category:"equipment", role:"ガス検知器・サンプリング機器の米国メーカー。", address:"米国・フロリダ州セントピーターズバーグ", lat:27.8737598, lng:-82.6490353 },
+    { id:274, name:"GfG Instrumentation", category:"equipment", role:"ガス検知器の米国メーカー。", address:"米国・ミシガン州アナーバー", lat:42.2354733, lng:-83.7500077 }
+  ];
+
+  let active = new Set(Object.keys(CATS));
+  let selectedId = null;
+  let labelsVisible = false;
+  let searchTerm = '';
+  const LABEL_ZOOM_THRESHOLD = 7;
+
+  const map = L.map('map', { zoomControl:true, attributionControl:true, worldCopyJump:true })
+    .setView([28, 30], 2);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  function makeIcon(f){
+    const color = CATS[f.category].color;
+    const size = 10;
+    return L.divIcon({
+      className: '',
+      html: `<div class="my-marker" style="position:relative;width:${size}px;height:${size}px;">
+               <div style="width:${size}px;height:${size}px;border-radius:50%;
+                 background:${color}; border:1.5px solid #0a0f1a;
+                 box-shadow:0 0 0 1px ${color}55;"></div>
+             </div>`,
+      iconSize:[size,size],
+      iconAnchor:[size/2,size/2],
+      popupAnchor:[0,-size/2]
+    });
+  }
+
+  const markers = {};
+  facilities.forEach(f=>{
+    const m = L.marker([f.lat,f.lng], { icon: makeIcon(f) }).addTo(map);
+    m.bindPopup(`
+      <div class="pop-cat" style="color:${CATS[f.category].color}">${CATS[f.category].label}</div>
+      <div class="pop-name">${f.name}</div>
+      <div class="pop-role">${f.role}</div>
+      <div class="pop-addr">${f.address}</div>
+    `);
+    m.bindTooltip(f.name, { permanent: true, direction: 'right', offset: [8,0], className: 'map-label', opacity: 1 });
+    m.on('click', ()=>{ selectedId = f.id; renderList(); });
+    markers[f.id] = m;
+  });
+
+  function passesFilter(f){
+    if(!active.has(f.category)) return false;
+    if(searchTerm && !f.name.toLowerCase().includes(searchTerm)) return false;
+    return true;
+  }
+
+  function updateLabelVisibility(){
+    const show = labelsVisible && map.getZoom() >= LABEL_ZOOM_THRESHOLD;
+    facilities.forEach(f=>{
+      const m = markers[f.id];
+      if(!map.hasLayer(m)) return;
+      if(show) m.openTooltip(); else m.closeTooltip();
+    });
+  }
+  map.on('zoomend', updateLabelVisibility);
+
+  const filtersEl = document.getElementById('filters');
+  Object.entries(CATS).forEach(([key,val])=>{
+    const chip = document.createElement('div');
+    chip.className = 'chip active';
+    chip.style.color = val.color;
+    chip.innerHTML = `<span class="sw" style="background:${val.color}"></span>${val.label}`;
+    chip.addEventListener('click', ()=>{
+      if(active.has(key)){ active.delete(key); chip.classList.remove('active'); }
+      else { active.add(key); chip.classList.add('active'); }
+      refresh();
+    });
+    filtersEl.appendChild(chip);
+  });
+
+  const listEl = document.getElementById('list');
+  const countEl = document.getElementById('countText');
+  const searchInput = document.getElementById('searchInput');
+  searchInput.addEventListener('input', (e)=>{
+    searchTerm = e.target.value.trim().toLowerCase();
+    refresh();
+  });
+
+  function renderList(){
+    const visible = facilities.filter(passesFilter);
+    countEl.textContent = `${visible.length} / ${facilities.length}`;
+    listEl.innerHTML = '';
+    if(visible.length===0){
+      listEl.innerHTML = `<div class="empty">該当する拠点がありません。<br>条件を変更してください。</div>`;
+      return;
+    }
+    visible.forEach(f=>{
+      const card = document.createElement('div');
+      card.className = 'card' + (f.id===selectedId ? ' selected' : '');
+      card.innerHTML = `
+        <div class="card-top">
+          <span class="card-dot" style="background:${CATS[f.category].color}"></span>
+          <span class="card-name">${f.name}</span>
+          <span class="card-cat">${CATS[f.category].label}</span>
+        </div>
+        <p class="card-role">${f.role}</p>
+        <div class="card-addr">${f.address}</div>
+      `;
+      card.addEventListener('click', ()=>{
+        selectedId = f.id;
+        map.flyTo([f.lat,f.lng], 12, { duration:0.7 });
+        setTimeout(()=>{ markers[f.id].openPopup(); }, 720);
+        renderList();
+      });
+      listEl.appendChild(card);
+    });
+  }
+
+  function refresh(){
+    facilities.forEach(f=>{
+      const shouldShow = passesFilter(f);
+      const onMap = map.hasLayer(markers[f.id]);
+      if(shouldShow && !onMap) markers[f.id].addTo(map);
+      if(!shouldShow && onMap) map.removeLayer(markers[f.id]);
+    });
+    updateLabelVisibility();
+    renderList();
+  }
+
+  const labelToggleBtn = document.getElementById('labelToggle');
+  labelToggleBtn.addEventListener('click', ()=>{
+    labelsVisible = !labelsVisible;
+    labelToggleBtn.classList.toggle('on', labelsVisible);
+    labelToggleBtn.setAttribute('aria-pressed', String(labelsVisible));
+    updateLabelVisibility();
+  });
+
+  renderList();
+  updateLabelVisibility();
+</script>
+</body>
+</html>
